@@ -23,26 +23,26 @@
 
 ## 安装
 
-### 1. 装 Ollama + 视觉模型
-
 ```bash
+# 1. 克隆
+git clone https://github.com/lancer7624/lifelens-screen-tracker.git
+cd lifelens-screen-tracker
+
+# 2. 安装依赖
+npm install
+
+# 3. 安装 Ollama + 视觉模型
 # 下载 Ollama: https://ollama.com
 ollama pull qwen3-vl:4b
+
+# 4. (可选) 获取 DeepSeek API Key
+# https://platform.deepseek.com/api_keys
+
+# 5. 启动
+npm start
 ```
 
-### 2. 获取 DeepSeek API Key（可选）
-
-如果没有 Key，会使用纯本地 Ollama 模式（精度略低但完全免费）。
-
-https://platform.deepseek.com/api_keys
-
-### 3. 启动
-
-```
-双击 start-app.cmd
-```
-
-首次启动会自动跳到设置页，填入 API Key 即可。
+首次启动会自动跳设置页。填好 DeepSeek Key 或直接切到「纯截图」模式就能用。
 
 ## 手机查看
 
