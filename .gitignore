@@ -1,0 +1,9 @@
+node_modules/
+screenshots/
+summaries/
+bg.jpg
+*.log
+dist/
+.web_toggle
+.DS_Store
+Thumbs.db

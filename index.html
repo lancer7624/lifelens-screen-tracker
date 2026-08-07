@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self'">
+  <title>LifeLens - 活动追踪器</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ═══ Tabs ═══ -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="monitor">监控</button>
+    <button class="tab" data-tab="dynamic">动态</button>
+    <button class="tab" data-tab="settings">设置</button>
+    <span class="tab-status" id="tabStatus"></span>
+  </nav>
+
+  <!-- ═══ TAB: 监控 ═══ -->
+  <div class="tab-content active" id="tab-monitor">
+
+    <section class="panel panel-controls">
+      <header class="panel-header">
+        <h1>LifeLens</h1>
+        <span class="subtitle">每 20 秒截屏并使用本地 Ollama 模型分析用户活动</span>
+      </header>
+
+      <div class="btn-row">
+        <button class="btn btn-start" id="btnStart">▶ 开始监控</button>
+        <button class="btn btn-stop" id="btnStop" disabled>■ 停止监控</button>
+        <button class="btn btn-folder" id="btnFolder">📂 打开数据文件夹</button>
+        <span class="provider-badge" id="providerBadge">ollama</span>
+        <select id="modelSelect" class="filter-input" style="width:150px" title="选择 DeepSeek 模型">
+          <option value="deepseek-v4-flash">V4 Flash (快速)</option>
+          <option value="deepseek-v4">V4 (完整)</option>
+          <option value="deepseek-chat">DeepSeek Chat</option>
+          <option value="deepseek-reasoner">DeepSeek Reasoner</option>
+        </select>
+      </div>
+
+      <div class="status-row">
+        <span>状态：<strong id="statusText">未运行</strong></span>
+        <span class="sep">|</span>
+        <span>队列：<strong id="queueCount">0</strong></span>
+        <span class="sep">|</span>
+        <span>最后截图：<strong id="lastCaptureLabel">-</strong></span>
+        <span class="sep">|</span>
+        <span>下次截屏：<strong id="nextCaptureLabel">-</strong> 秒后</span>
+        <span class="sep">|</span>
+        <span id="summaryStatus" class="summary-status"></span>
+      </div>
+
+      <div class="bubbles">
+        <div class="bubble">
+          <div class="bubble-num" id="totalCaptures">0</div>
+          <div class="bubble-label">总截图数</div>
+        </div>
+        <div class="bubble">
+          <div class="bubble-num" id="analyzedCount">0</div>
+          <div class="bubble-label">已分析</div>
+        </div>
+        <div class="bubble">
+          <div class="bubble-num error" id="errorCount">0</div>
+          <div class="bubble-label">错误数</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel panel-results">
+      <div class="panel-title">最近分析结果</div>
+      <div class="results-box" id="resultsList">
+        <div class="empty-hint">点击「开始监控」进行记录</div>
+      </div>
+    </section>
+
+    <section class="panel panel-log">
+      <div class="panel-title">运行日志</div>
+      <div class="log-box" id="logList">
+        <div class="log-line muted">等待启动…</div>
+      </div>
+    </section>
+
+    <section class="panel panel-config">
+      <div class="panel-title">配置信息</div>
+      <div class="config-grid">
+        <div><span class="cfg-label">模型</span><span class="cfg-value">qwen3-vl:4b → DeepSeek V4 Flash</span></div>
+        <div><span class="cfg-label">截图间隔</span><span class="cfg-value">20 秒</span></div>
+        <div><span class="cfg-label">汇总间隔</span><span class="cfg-value">10 分钟</span></div>
+        <div><span class="cfg-label">文件格式</span><span class="cfg-value">YYYY-MM-DD_HH.json</span></div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ═══ TAB: 动态 ═══ -->
+  <div class="tab-content" id="tab-dynamic">
+
+    <section class="panel">
+      <div class="panel-title">活动热力图</div>
+      <p class="heatmap-legend">
+        <span class="dot work"></span>工作
+        <span class="dot learn"></span>学习
+        <span class="dot play"></span>娱乐
+        <span class="dot social"></span>社交
+        <span class="dot none"></span>无记录
+      </p>
+      <div class="heatmap-controls">
+        <button class="btn btn-sm" id="hmPrev">◀ 前一天</button>
+        <select id="hmYear" class="filter-input" style="width:80px"></select>
+        <select id="hmMonth" class="filter-input" style="width:65px"></select>
+        <select id="hmDay" class="filter-input" style="width:65px"></select>
+        <button class="btn btn-sm" id="hmNext">后一天 ▶</button>
+        <span class="heatmap-label" id="hmLabel"></span>
+      </div>
+      <div class="heatmap" id="heatmap"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">活动时间线</div>
+      <div class="timeline-filters">
+        <input type="text" id="filterProject" placeholder="项目名称" class="filter-input" style="width:120px">
+        <input type="text" id="filterSoftware" placeholder="软件" class="filter-input" style="width:100px">
+        <select id="filterYear" class="filter-input" style="width:75px"><option value="">年</option></select>
+        <select id="filterMonth" class="filter-input" style="width:60px"><option value="">月</option></select>
+        <select id="filterDay" class="filter-input" style="width:60px"><option value="">日</option></select>
+        <select id="filterCategory" class="filter-input" style="width:85px">
+          <option value="">全部分类</option>
+          <option value="工作">工作</option>
+          <option value="学习">学习</option>
+          <option value="娱乐">娱乐</option>
+          <option value="社交">社交</option>
+        </select>
+        <button class="btn btn-sm btn-start" id="filterApply">确认筛选</button>
+        <button class="btn btn-sm" id="filterClear">清除</button>
+        <span class="filter-count" id="filterCount"></span>
+      </div>
+      <div class="timeline" id="timeline">
+        <div class="empty-hint">加载中…</div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ═══ TAB: 设置 ═══ -->
+  <div class="tab-content" id="tab-settings">
+
+    <section class="panel">
+      <div class="panel-title">视觉识别方式</div>
+      <div class="settings-form">
+        <select id="setProvider" class="set-input">
+          <option value="ollama">Ollama — 本地视觉模型 (推荐)</option>
+          <option value="lmstudio">LM Studio — OpenAI 兼容 API</option>
+          <option value="none">纯截图 — 不 AI 分析</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Ollama settings (shown when provider=ollama) -->
+    <section class="panel" id="panelOllama">
+      <div class="panel-title">Ollama 配置</div>
+      <p class="settings-hint">需要先安装并拉取视觉模型。<a href="#" class="settings-link" data-url="https://ollama.com">下载 Ollama →</a></p>
+      <div class="settings-form">
+        <label class="set-label">主机</label>
+        <input type="text" id="setOllamaHost" class="set-input" placeholder="127.0.0.1" value="127.0.0.1">
+        <label class="set-label">端口</label>
+        <input type="text" id="setOllamaPort" class="set-input" placeholder="11434" value="11434">
+        <label class="set-label">模型名</label>
+        <input type="text" id="setVisionModel" class="set-input" placeholder="qwen3-vl:4b" value="qwen3-vl:4b">
+      </div>
+    </section>
+
+    <!-- LM Studio settings (shown when provider=lmstudio) -->
+    <section class="panel" id="panelLmStudio" style="display:none">
+      <div class="panel-title">LM Studio 配置</div>
+      <p class="settings-hint">在 LM Studio 中加载视觉模型并开启本地服务。<a href="#" class="settings-link" data-url="https://lmstudio.ai">下载 LM Studio →</a></p>
+      <div class="settings-form">
+        <label class="set-label">主机</label>
+        <input type="text" id="setLmHost" class="set-input" placeholder="127.0.0.1" value="127.0.0.1">
+        <label class="set-label">端口</label>
+        <input type="text" id="setLmPort" class="set-input" placeholder="1234" value="1234">
+        <label class="set-label">模型名 (auto=自动)</label>
+        <input type="text" id="setLmModel" class="set-input" placeholder="auto" value="auto">
+      </div>
+    </section>
+
+    <!-- DeepSeek (optional, always shown) -->
+    <section class="panel">
+      <div class="panel-title">DeepSeek 提炼 (可选)</div>
+      <p class="settings-hint">不填则用纯本地模式。每个用户需要自己的 Key。<a href="#" class="settings-link" data-url="https://platform.deepseek.com/api_keys">获取 Key →</a></p>
+      <div class="settings-form">
+        <label class="set-label">API Key</label>
+        <input type="password" id="setApiKey" class="set-input" placeholder="留空=纯本地分析">
+        <label class="set-label">模型</label>
+        <select id="setModel" class="set-input">
+          <option value="deepseek-v4-flash">V4 Flash (快速)</option>
+          <option value="deepseek-v4">V4 (完整)</option>
+          <option value="deepseek-chat">DeepSeek Chat</option>
+          <option value="deepseek-reasoner">DeepSeek Reasoner</option>
+        </select>
+      </div>
+    </section>
+
+    <div class="btn-row">
+      <button class="btn btn-folder" id="btnBackFromSettings">← 返回监控</button>
+      <button class="btn btn-start" id="btnSaveSettings">💾 保存配置</button>
+      <span id="settingsMsg" style="font-size:12px;margin-left:8px"></span>
+    </div>
+
+  <!-- /TAB: 设置 -->
+
+</div>
+
+<script src="renderer.js"></script>
+</body>
+</html>

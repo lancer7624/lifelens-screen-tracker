@@ -1,0 +1,12 @@
+{
+  "vision_provider": "ollama",
+  "api_key": "",
+  "model": "deepseek-v4-flash",
+  "base_url": "https://api.deepseek.com/v1/chat/completions",
+  "ollama_host": "127.0.0.1",
+  "ollama_port": "11434",
+  "vision_model": "qwen3-vl:4b",
+  "lmstudio_host": "127.0.0.1",
+  "lmstudio_port": "1234",
+  "lmstudio_model": "auto"
+}

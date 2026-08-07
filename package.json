@@ -1,0 +1,16 @@
+{
+  "name": "screen-analyzer",
+  "version": "1.0.0",
+  "description": "截屏 + Ollama 视觉分析 — 每 20s 记录用户活动",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0"
+  },
+  "allowScripts": {}
+}
