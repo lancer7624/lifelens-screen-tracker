@@ -18,4 +18,6 @@ contextBridge.exposeInMainWorld('api', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   getDiary: (date) => ipcRenderer.invoke('get-diary', date),
   getAllDiaries: () => ipcRenderer.invoke('get-all-diaries'),
+  qaAsk: (q) => ipcRenderer.invoke('qa-ask', q),
+  onQaStep: (cb) => ipcRenderer.on('qa-step', (_e, s) => cb(s)),
 });

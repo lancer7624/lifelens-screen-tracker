@@ -162,4 +162,62 @@ async function init(){
   el.btnStop.addEventListener('click',async()=>{await api('/api/toggle-running',{method:'POST'});});
   el.btnFolder.style.display='none'; // Web can't open local folders
 }
+// ═══ DIARY (web) ═════════════════════════════════════
+let diaryLoaded=false;
+async function initWebDiary(){
+  if(diaryLoaded)return;diaryLoaded=true;
+  const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
+  const y=yesterday.getFullYear(),m=yesterday.getMonth()+1,d=yesterday.getDate();
+  populateYearSelect($('#diaryYear'),2026,2030,y);populateMonthSelect($('#diaryMonth'),m);populateDaySelect($('#diaryDay'),y,m,d);
+  $('#diaryYear').onchange=()=>{syncWebDiaryDay();loadWebDiary()};$('#diaryMonth').onchange=()=>{syncWebDiaryDay();loadWebDiary()};$('#diaryDay').onchange=loadWebDiary;
+  $('#diaryPrev').onclick=()=>shiftWebDiary(-1);$('#diaryNext').onclick=()=>shiftWebDiary(1);
+  loadWebDiary();
+}
+function getWebDiaryDate(){return getDateFromSelects($('#diaryYear'),$('#diaryMonth'),$('#diaryDay'))}
+function syncWebDiaryDay(){const y=+$('#diaryYear').value,m=+$('#diaryMonth').value,cur=+$('#diaryDay').value,max=daysInMonth(y,m);populateDaySelect($('#diaryDay'),y,m,cur>max?max:cur)}
+function shiftWebDiary(days){const dt=getWebDiaryDate();if(!dt)return;const d=new Date(dt+'T12:00:00');d.setDate(d.getDate()+days);$('#diaryYear').value=d.getFullYear();$('#diaryMonth').value=d.getMonth()+1;syncWebDiaryDay();$('#diaryDay').value=d.getDate();loadWebDiary()}
+async function loadWebDiary(){
+  const date=getWebDiaryDate();if(!date)return;
+  try{
+    const diary=await api('/api/diary?date='+date);
+    if(!diary||diary.error){$('#diaryContent').innerHTML='<div class="diary-card"><div class="diary-date">'+date+'</div><div class="diary-body">暂无日记</div></div>';return}
+    $('#diaryContent').innerHTML='<div class="diary-card"><div class="diary-date">'+esc(diary.date)+'</div><div class="diary-body">'+esc(diary.summary||'')+'</div>'+(diary.tips?'<div class="diary-tips">'+esc(diary.tips)+'</div>':'')+'</div>';
+    const hls=document.getElementById('hlList'),tds=document.getElementById('todoList'),sgs=document.getElementById('sugList');
+    if(hls)hls.innerHTML=(diary.highlights||[]).map((h,i)=>'<div class="hl-item"><span class="hl-num">'+(i+1)+'</span><span>'+esc(h)+'</span></div>').join('');
+    if(tds)tds.innerHTML=(diary.todos||[]).map(t=>'<div class="todo-item">'+esc(t)+'</div>').join('');
+    if(sgs)sgs.innerHTML=(diary.suggestions||[]).map(s=>'<div class="sug-item">'+esc(s)+'</div>').join('');
+  }catch(e){$('#diaryContent').innerHTML='<div class="empty-hint">加载失败</div>'}
+}
+
+// ═══ QA (web) ════════════════════════════════════════
+$('#qaAsk').onclick=async()=>{
+  const q=$('#qaInput').value.trim();if(!q)return;
+  $('#qaAsk').disabled=true;$('#qaAsk').textContent='搜索中…';
+  $('#qaSteps').style.display='';$('#qaStepsList').innerHTML='<div style="color:var(--text-muted);font-size:12px">正在搜索…</div>';
+  try{
+    const r=await api('/api/qa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});
+    $('#qaStepsList').innerHTML=(r.steps||[]).map(s=>'<div class="qa-step-item"><span class="qa-step-round">第'+s.round+'轮</span> '+esc(s.keywords.join(', '))+' → '+s.found+'条</div>').join('');
+    $('#qaAnswer').style.display='';$('#qaAnswerText').textContent=r.answer;$('#qaMeta').textContent='共 '+r.resultCount+' 条';
+  }catch(e){$('#qaStepsList').innerHTML='<div style="color:var(--red)">失败: '+esc(e.message)+'</div>'}
+  $('#qaAsk').disabled=false;$('#qaAsk').textContent='提问';
+};
+$('#qaInput').onkeydown=e=>{if(e.key==='Enter')$('#qaAsk').click()};
+
+// ═══ Tab extensions (web) ═════════════════════════════
+const origSwitchWeb=switchTab;
+switchTab=function(name){
+  origSwitchWeb(name);
+  if(name==='review'){$('#subTabsReview').style.display='flex';activateSubTab('dynamic')}
+  else{$('#subTabsReview').style.display='none'}
+  if(name==='diary')initWebDiary();
+};
+$$('.sub-tab').forEach(b=>b.addEventListener('click',function(){switchTab('review');activateSubTab(this.dataset.sub)}));
+function activateSubTab(name){
+  $$('.sub-tab').forEach(b=>b.classList.toggle('active',b.dataset.sub===name));
+  $$('.tab-content').forEach(c=>c.classList.toggle('active',false));
+  const map={dynamic:'tab-dynamic',dashboard:'tab-dashboard',diary:'tab-diary'};
+  const t=document.getElementById(map[name]);if(t)t.classList.add('active');
+  if(name==='diary')initWebDiary();if(name==='dynamic')loadDynamicTab();
+}
+
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();

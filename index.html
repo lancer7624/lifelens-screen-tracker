@@ -14,12 +14,16 @@
 
   <!-- ═══ Tabs ═══ -->
   <nav class="tabs">
-    <button class="tab active" data-tab="monitor">📡 监控</button>
-    <button class="tab" data-tab="dynamic">📈 动态</button>
-    <button class="tab" data-tab="diary">📔 日记</button>
-    <button class="tab" data-tab="dashboard">📊 看板</button>
-    <button class="tab" data-tab="settings">⚙️ 设置</button>
+    <button class="tab active" data-tab="monitor">实时</button>
+    <button class="tab" data-tab="review">回顾</button>
+    <button class="tab" data-tab="qa">对话</button>
+    <div class="sub-tabs" id="subTabsReview" style="display:none">
+      <button class="sub-tab active" data-sub="dynamic">热力图</button>
+      <button class="sub-tab" data-sub="dashboard">看板</button>
+      <button class="sub-tab" data-sub="diary">日记</button>
+    </div>
     <span class="tab-status" id="tabStatus"></span>
+    <button class="tab gear" data-tab="settings" title="设置">⚙</button>
   </nav>
 
   <!-- ═══ TAB: 监控 ═══ -->
@@ -215,7 +219,30 @@
 
     <section class="panel">
       <div class="panel-title">活动时间分布</div>
-      <div class="chart-wrap"><canvas id="chartTimeline" width="760" height="200"></canvas></div>
+      <div class="chart-wrap"><canvas id="chartTimeline" width="780" height="360"></canvas></div>
+    </section>
+  </div>
+
+  <!-- ═══ TAB: 问答 ═══ -->
+  <div class="tab-content" id="tab-qa">
+    <section class="panel">
+      <div class="panel-title">向你的数据提问</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">模型会先搜索你的截屏记录、10分钟汇总和日记，找到相关内容后再回答。</p>
+      <div class="qa-input-row">
+        <input type="text" id="qaInput" class="set-input" placeholder="例如：我上周四下午在做什么？最近主要在开发什么项目？" style="flex:1">
+        <button class="btn btn-start" id="qaAsk">提问</button>
+      </div>
+    </section>
+
+    <section class="panel" id="qaSteps" style="display:none">
+      <div class="panel-title">🔍 搜索过程</div>
+      <div id="qaStepsList"></div>
+    </section>
+
+    <section class="panel" id="qaAnswer" style="display:none">
+      <div class="panel-title">💬 回答</div>
+      <div class="qa-answer-text" id="qaAnswerText"></div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text-muted)" id="qaMeta"></div>
     </section>
   </div>
 

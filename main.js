@@ -1,7 +1,7 @@
 /**
  * main.js — LifeLens 活动追踪器 主进程
  */
-const { app, BrowserWindow, ipcMain, Menu, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog, powerMonitor } = require('electron');
 const path = require('path');
 const { capture } = require('./modules/screenshot');
 const { analyze, USE_PIPELINE, getModel: getAnalysisModel, setModel: setAnalysisModel, getProvider, reloadConfig: reloadAnalyzerConfig } = require('./modules/analyzer');
@@ -9,6 +9,8 @@ const { saveRecord, todayCount } = require('./modules/storage');
 const { summarizeBlock, findUnprocessedBlocks, loadAllSummaries, getModel: getSummaryModel, setModel: setSummaryModel } = require('./modules/summarizer');
 const { start: startServer, updateState: updateServerState } = require('./modules/server');
 const { generateDiary, loadDiary, findUnprocessedDates, loadSummariesForDate, loadAllDiaries } = require('./modules/diarist');
+const { ask: qaAsk } = require('./modules/qa');
+const { run: cleanupRun } = require('./modules/cleanup');
 
 // ─── 配置 ───────────────────────────────────────────
 const INTERVAL_MS = 20_000;
@@ -112,6 +114,16 @@ function setupIPC() {
   ipcMain.handle('get-all-diaries', async () => loadAllDiaries());
 
   ipcMain.handle('get-unprocessed-diaries', async () => findUnprocessedDates());
+
+  // QA
+  ipcMain.handle('qa-ask', async (_e, question) => {
+    const result = await qaAsk(question, (step) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('qa-step', step);
+      }
+    });
+    return result;
+  });
 
   ipcMain.handle('set-model', async (_e, model) => {
     setAnalysisModel(model);
@@ -283,6 +295,23 @@ async function processQueue() {
 
 // ─── 定时器 ─────────────────────────────────────────
 let captureInProgress = false, nextCaptureAt = 0;
+let idlePaused = false, idleTimer = null;
+const IDLE_MINUTES = 5;
+
+function checkIdle() {
+  const idleSec = powerMonitor.getSystemIdleTime();
+  if (idleSec > IDLE_MINUTES * 60 && running && !idlePaused) {
+    idlePaused = true;
+    stopLoop();
+    state.statusText = '空闲暂停（人已离开）';
+    addLog('检测到空闲，自动暂停');
+    pushState();
+  } else if (idleSec < 30 && idlePaused && !running) {
+    idlePaused = false;
+    startLoop();
+    addLog('检测到活动，自动恢复');
+  }
+}
 
 async function runOneCycleSafe() {
   if (captureInProgress) return;
@@ -348,6 +377,21 @@ app.whenReady().then(async () => {
   state.mobileURL = `http://${srv.ip}:${srv.port}`;
   addLog(`局域网访问: ${state.mobileURL}`);
   pushState();
+
+  // Idle detection — check every 30s
+  idleTimer = setInterval(checkIdle, 30000);
+
+  // Cleanup — run at startup + every 6 hours
+  const doCleanup = () => {
+    try {
+      const r = cleanupRun();
+      if (r.screenshotsDeleted > 0 || r.sizeEnforced > 0) {
+        addLog(`清理: ${r.screenshotsDeleted}张过期截图, 当前${r.currentSizeMB}MB`);
+      }
+    } catch (e) { /* silent */ }
+  };
+  setTimeout(doCleanup, 10000);
+  setInterval(doCleanup, 6 * 3600_000);
 
   // 启动后排隊处理遗漏汇总 + 日记
   setTimeout(() => processQueue(), 3000);

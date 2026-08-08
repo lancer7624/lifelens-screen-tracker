@@ -83,12 +83,41 @@ function getDateFromSelects(ySel, mSel, dSel) {
 }
 
 // ═══ TAB SWITCHING ═════════════════════════════════════
+const subTabsReview = $('#subTabsReview');
+const subTabBtns = $$('.sub-tab');
+let currentSub = 'dynamic';
+
 function switchTab(name) {
   el.tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
-  el.tabContents.forEach((c) => c.classList.toggle('active', c.id === `tab-${name}`));
-  if (name === 'dynamic') loadDynamicTab();
+  el.tabContents.forEach((c) => c.classList.toggle('active', false));
+
+  if (name === 'review') {
+    subTabsReview.style.display = 'flex';
+    activateSubTab(currentSub);
+  } else if (name === 'settings') {
+    subTabsReview.style.display = 'none';
+    loadSettingsTab();
+    el.tabContents.forEach((c) => { if (c.id === 'tab-settings') c.classList.add('active'); });
+  } else {
+    subTabsReview.style.display = 'none';
+    el.tabContents.forEach((c) => { if (c.id === 'tab-' + name) c.classList.add('active'); });
+  }
 }
+
+function activateSubTab(name) {
+  currentSub = name;
+  subTabBtns.forEach((b) => b.classList.toggle('active', b.dataset.sub === name));
+  el.tabContents.forEach((c) => c.classList.toggle('active', false));
+  const map = { dynamic: 'tab-dynamic', dashboard: 'tab-dashboard', diary: 'tab-diary' };
+  const target = document.getElementById(map[name]);
+  if (target) target.classList.add('active');
+  if (name === 'dynamic') loadDynamicTab();
+  if (name === 'diary') initDiaryTab();
+  if (name === 'dashboard') initDashboardTab();
+}
+
 el.tabs.forEach((t) => t.addEventListener('click', () => switchTab(t.dataset.tab)));
+subTabBtns.forEach((b) => b.addEventListener('click', () => { switchTab('review'); activateSubTab(b.dataset.sub); }));
 
 // ═══ MONITOR TAB ══════════════════════════════════════
 function updateMonitor(s) {
@@ -496,46 +525,76 @@ async function refreshDashboard() {
 }
 
 // ─── Pie Chart: Category ────────────────────────────────
-// ═══ CHART ENGINE (finesse) ═══════════════════════════
+// ═══ CHART ENGINE (finesse · readable sizing) ═══════
 const CHART_COLORS={'工作':'#7db87d','学习':'#7daed8','娱乐':'#d4a87d','社交':'#c894c8'};
 const CHART_FB=['#7db87d','#7daed8','#d4a87d','#c894c8','#c8946c','#8a9a90'];
+const FONT='13px "PingFang SC","Microsoft YaHei",sans-serif';
+const FONTS='12px "PingFang SC","Microsoft YaHei",sans-serif';
+const FONTB='bold 13px "SF Mono","Cascadia Code",monospace';
+const FONTXL='bold 15px "PingFang SC","Microsoft YaHei",sans-serif';
+let _currentSummary=[];
+
+// Interactive: click pie sector → drill into category
+function onPieClick(items,total,R,cx,cy,canvas){
+  canvas.onclick=e=>{
+    const r=canvas.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+    const dx=mx-cx,dy=my-cy,dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist>R)return;
+    let ang=Math.atan2(dy,dx);if(ang<-Math.PI/2)ang+=Math.PI*2;
+    let a=-Math.PI/2;
+    for(const item of items){
+      const slice=(item.val/item._total)*Math.PI*2;
+      if(ang>=a&&ang<a+slice){
+        $('#ftCat').value=item.name;$('#ftApply').click();
+        switchTab('review');activateSubTab('dashboard');
+        return
+      }
+      a+=slice
+    }
+  }
+}
 
 function rrect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath()}
 
-// Chart tooltip system
-let _ctCanvas=null,_ctData=[],_ctTT=null;
-function initChartTT(canvas,data){_ctCanvas=canvas;_ctData=data;_ctTT=_ctTT||(()=>{const d=document.createElement('div');d.className='hm-tt';d.id='chartTT';document.body.appendChild(d);return d})();canvas.onmousemove=e=>{const r=canvas.getBoundingClientRect();const items=_ctData.filter(d=>d.test(e.clientX-r.left,e.clientY-r.top));if(items.length){const t=_ctTT();t.innerHTML=items[0].html;t.style.display='block';t.style.left=(e.clientX+14)+'px';t.style.top=(e.clientY-8)+'px'}else{_ctTT().style.display='none'}};canvas.onmouseleave=()=>{_ctTT().style.display='none'}}
+// Tooltip
+let _ctTT=null;
+function chartTT(){if(!_ctTT){const d=document.createElement('div');d.className='hm-tt';d.id='chartTT';document.body.appendChild(d);_ctTT=d}return _ctTT}
+function bindTT(canvas,zones){canvas.onmousemove=e=>{const r=canvas.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;const hit=zones.filter(z=>z.test(mx,my));if(hit.length){const t=chartTT();t.innerHTML=hit[0].html;t.style.display='block';t.style.left=(e.clientX+14)+'px';t.style.top=(e.clientY-8)+'px'}else{chartTT().style.display='none'}};canvas.onmouseleave=()=>{chartTT().style.display='none'}}
 
 function drawCatPie(summaries){
+  _currentSummary=summaries;
   const cats={};for(const s of summaries){const c=s.category||'未知';cats[c]=(cats[c]||0)+1}
   const canvas=document.getElementById('chartPie');const ctx=canvas.getContext('2d');
-  const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2,R=Math.min(cx,cy)-28;ctx.clearRect(0,0,w,h);
-  const items=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
-  const total=items.reduce((s,[,v])=>s+v,0);if(!total)return;
+  const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2,R=Math.min(cx,cy)-32;ctx.clearRect(0,0,w,h);
+  const items=Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([name,val])=>({name,val,_total:0}));
+  const total=items.reduce((s,i)=>s+i.val,0);if(!total)return;
+  items.forEach(i=>i._total=total);
 
   ctx.shadowColor='rgba(0,0,0,.25)';ctx.shadowBlur=10;ctx.shadowOffsetY=2;
   let angle=-Math.PI/2;
-  items.forEach(([name,val],i)=>{
+  items.forEach((item,i)=>{
+    const val=item.val;const name=item.name;
     const slice=(val/total)*Math.PI*2;
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R,angle,angle+slice);
     ctx.fillStyle=CHART_COLORS[name]||CHART_FB[i%CHART_FB.length];ctx.fill();
-    if(val/total>.06){
+    if(val/total>.05){
       const mid=angle+slice/2;
       ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
-      ctx.fillStyle='#0d0b0a';ctx.font='bold 11px "PingFang SC","Microsoft YaHei",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle='#0d0b0a';ctx.font=FONTXL;ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillText(Math.round(val/total*100)+'%',cx+Math.cos(mid)*R*.6,cy+Math.sin(mid)*R*.6);
       ctx.shadowColor='rgba(0,0,0,.25)';ctx.shadowBlur=10;ctx.shadowOffsetY=2;
     }
     angle+=slice;
   });
   ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+  onPieClick(items,total,R,cx,cy,canvas);
 
-  ctx.textBaseline='middle';let ly=18;
-  items.forEach(([name,val],i)=>{
+  ctx.textBaseline='middle';let ly=22;
+  items.forEach(({name,val},i)=>{
     const col=CHART_COLORS[name]||CHART_FB[i%CHART_FB.length];
-    ctx.fillStyle=col;rrect(ctx,10,ly-6,12,12,3);ctx.fill();
-    ctx.fillStyle='#b0aab8';ctx.font='11px "PingFang SC","Microsoft YaHei",sans-serif';ctx.textAlign='left';
-    ctx.fillText(name+'  '+val+'时段',28,ly);ly+=22;
+    ctx.fillStyle=col;rrect(ctx,12,ly-7,14,14,3);ctx.fill();
+    ctx.fillStyle='#c8c4c0';ctx.font=FONT;ctx.textAlign='left';
+    ctx.fillText(name+'  '+val+'时段',32,ly);ly+=26;
   });
 }
 
@@ -545,20 +604,20 @@ function drawSoftwareBar(summaries){
   const canvas=document.getElementById('chartSoftware');const ctx=canvas.getContext('2d');
   const w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);
   if(!items.length)return;
-  const max=items[0][1],barH=Math.min(24,(h-40)/items.length);
-  const ttData=[];
+  const max=items[0][1],barH=Math.min(28,(h-50)/items.length),labelW=125;
+  const zones=[];
   items.forEach(([name,val],i)=>{
-    const bw=Math.max(4,(val/max)*(w-130)),y=16+i*(barH+8);
-    ttData.push({test:(mx,my)=>mx>=108&&mx<=108+bw&&my>=y&&my<=y+barH,html:`<b>${esc(name)}</b><br>${val} 次`});
-    ctx.fillStyle='rgba(255,255,255,.025)';rrect(ctx,108,y,w-125,barH,4);ctx.fill();
-    const g=ctx.createLinearGradient(108,0,300,0);g.addColorStop(0,'#c8946c');g.addColorStop(1,'rgba(200,148,108,.35)');
-    ctx.fillStyle=g;rrect(ctx,108,y,bw,barH,4);ctx.fill();
-    ctx.fillStyle='#b0aab8';ctx.font='11px "PingFang SC","Microsoft YaHei",sans-serif';ctx.textAlign='right';ctx.textBaseline='middle';
-    ctx.fillText(name.length>11?name.slice(0,10)+'…':name,104,y+barH/2);
-    ctx.fillStyle='#e4e5ea';ctx.textAlign='left';ctx.font='bold 11px "SF Mono","Cascadia Code",monospace';
-    ctx.fillText(val,112+bw,y+barH/2);
+    const bw=Math.max(8,(val/max)*(w-labelW-20)),y=20+i*(barH+10);
+    zones.push({test:(mx,my)=>mx>=labelW&&mx<=labelW+bw&&my>=y&&my<=y+barH,html:`<b>${esc(name)}</b><br>${val} 次`});
+    ctx.fillStyle='rgba(255,255,255,.025)';rrect(ctx,labelW,y,w-labelW-15,barH,5);ctx.fill();
+    const g=ctx.createLinearGradient(labelW,0,labelW+250,0);g.addColorStop(0,'#c8946c');g.addColorStop(1,'rgba(200,148,108,.35)');
+    ctx.fillStyle=g;rrect(ctx,labelW,y,bw,barH,5);ctx.fill();
+    ctx.fillStyle='#c8c4c0';ctx.font=FONTS;ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(name.length>14?name.slice(0,13)+'…':name,labelW-5,y+barH/2);
+    ctx.fillStyle='#e4e5ea';ctx.textAlign='left';ctx.font=FONTB;
+    ctx.fillText(val,labelW+bw+6,y+barH/2);
   });
-  initChartTT(canvas,ttData);
+  bindTT(canvas,zones);
 }
 
 function drawProjectBar(summaries){
@@ -567,16 +626,16 @@ function drawProjectBar(summaries){
   const canvas=document.getElementById('chartProjects');const ctx=canvas.getContext('2d');
   const w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);
   if(!items.length)return;
-  const max=items[0][1],barH=Math.min(30,(h-40)/items.length);
+  const max=items[0][1],barH=Math.min(34,(h-50)/items.length),labelW=155;
   items.forEach(([name,val],i)=>{
-    const bw=Math.max(4,(val/max)*(w-170)),y=16+i*(barH+10);
-    ctx.fillStyle='rgba(255,255,255,.025)';rrect(ctx,138,y,w-165,barH,4);ctx.fill();
-    const g=ctx.createLinearGradient(138,0,380,0);g.addColorStop(0,'#7daed8');g.addColorStop(1,'rgba(125,174,216,.35)');
-    ctx.fillStyle=g;rrect(ctx,138,y,bw,barH,4);ctx.fill();
-    ctx.fillStyle='#b0aab8';ctx.font='11px "PingFang SC","Microsoft YaHei",sans-serif';ctx.textAlign='right';ctx.textBaseline='middle';
-    ctx.fillText(name.length>14?name.slice(0,13)+'…':name,134,y+barH/2);
-    ctx.fillStyle='#e4e5ea';ctx.textAlign='left';ctx.font='bold 11px "SF Mono","Cascadia Code",monospace';
-    ctx.fillText(val+'时段',142+bw,y+barH/2);
+    const bw=Math.max(8,(val/max)*(w-labelW-20)),y=20+i*(barH+12);
+    ctx.fillStyle='rgba(255,255,255,.025)';rrect(ctx,labelW,y,w-labelW-15,barH,5);ctx.fill();
+    const g=ctx.createLinearGradient(labelW,0,labelW+300,0);g.addColorStop(0,'#7daed8');g.addColorStop(1,'rgba(125,174,216,.35)');
+    ctx.fillStyle=g;rrect(ctx,labelW,y,bw,barH,5);ctx.fill();
+    ctx.fillStyle='#c8c4c0';ctx.font=FONTS;ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(name.length>18?name.slice(0,17)+'…':name,labelW-5,y+barH/2);
+    ctx.fillStyle='#e4e5ea';ctx.textAlign='left';ctx.font=FONTB;
+    ctx.fillText(val+'时段',labelW+bw+6,y+barH/2);
   });
 }
 
@@ -586,28 +645,68 @@ function drawTimeline(summaries,range){
   const hourCats={};
   for(const s of summaries){const hr=new Date(s.blockStart).getHours();if(!hourCats[hr])hourCats[hr]={};const c=s.category||'未知';hourCats[hr][c]=(hourCats[hr][c]||0)+1}
   let max=1;for(const h of Object.values(hourCats)){const t=Object.values(h).reduce((a,b)=>a+b,0);if(t>max)max=t}
-  const colW=(w-45)/24,chartH=h-30;
-  ctx.strokeStyle='rgba(255,255,255,.025)';ctx.lineWidth=1;
-  for(let i=2;i<5;i++){const gy=8+(chartH/5)*i;ctx.beginPath();ctx.moveTo(30,gy);ctx.lineTo(w-12,gy);ctx.stroke()}
+  const colW=(w-60)/24,chartH=h-70;
+  // Grid
+  ctx.strokeStyle='rgba(255,255,255,.03)';ctx.lineWidth=1;
+  for(let i=1;i<=4;i++){const gy=15+(chartH/4)*i;ctx.beginPath();ctx.moveTo(40,gy);ctx.lineTo(w-10,gy);ctx.stroke()}
+  // Bars
   for(let hr=0;hr<24;hr++){
-    const x=30+hr*colW,entries=Object.entries(hourCats[hr]||{}).sort((a,b)=>b[1]-a[1]);
+    const x=40+hr*colW,entries=Object.entries(hourCats[hr]||{}).sort((a,b)=>b[1]-a[1]);
     const total=entries.reduce((s,[,v])=>s+v,0);if(!total)continue;
-    let sy=8+chartH;
-    entries.forEach(([cat,val])=>{const segH=(val/max)*chartH;sy-=segH;ctx.fillStyle=CHART_COLORS[cat]||CHART_FB[0];ctx.fillRect(x+1.5,sy,colW-3,Math.max(3,segH))});
+    let sy=15+chartH;
+    entries.forEach(([cat,val])=>{const segH=Math.max(4,(val/max)*chartH);sy-=segH;ctx.fillStyle=CHART_COLORS[cat]||CHART_FB[0];ctx.fillRect(x+2,sy,colW-5,segH-1)});
   }
-  ctx.fillStyle='#6e707d';ctx.font='9px "PingFang SC","Microsoft YaHei",sans-serif';ctx.textAlign='center';
-  for(let h=0;h<24;h+=3)ctx.fillText(h+'时',30+h*colW+colW/2,h-2);
-  ctx.textAlign='right';ctx.fillText(max,24,14);
+  // X-axis labels — below bars, above legend
+  ctx.fillStyle='#8a8a90';ctx.font='12px "PingFang SC","Microsoft YaHei",sans-serif';ctx.textAlign='center';ctx.textBaseline='top';
+  for(let h=0;h<24;h+=3)ctx.fillText(h+'时',40+h*colW+colW/2,chartH+20);
+  // Legend — bottom
+  ctx.textAlign='left';let lx=42,ly=h-12;
+  Object.entries(CHART_COLORS).forEach(([name,col])=>{ctx.fillStyle=col;ctx.fillRect(lx,ly-8,12,12);ctx.fillStyle='#8a8a90';ctx.font='11px "PingFang SC","Microsoft YaHei",sans-serif';ctx.fillText(name,lx+16,ly);lx+=56});
 }
 
-// Extend tab switching for diary + dashboard
-const origSwitchTab2 = switchTab;
-switchTab = function (name) {
-  origSwitchTab2(name);
-  if (name === 'diary') initDiaryTab();
-  if (name === 'dashboard') initDashboardTab();
-  if (name === 'settings') loadSettingsTab();
+// ═══ QA TAB ═══════════════════════════════════════════
+const elQa = {
+  qaInput: $('#qaInput'), qaAsk: $('#qaAsk'),
+  qaSteps: $('#qaSteps'), qaStepsList: $('#qaStepsList'),
+  qaAnswer: $('#qaAnswer'), qaAnswerText: $('#qaAnswerText'), qaMeta: $('#qaMeta'),
 };
+
+elQa.qaAsk.addEventListener('click', async () => {
+  const q = elQa.qaInput.value.trim();
+  if (!q) return;
+  elQa.qaAsk.disabled = true;
+  elQa.qaAsk.textContent = '搜索中…';
+  elQa.qaSteps.style.display = '';
+  elQa.qaStepsList.innerHTML = '<div style="color:var(--text-muted);font-size:12px">正在分析问题…</div>';
+  elQa.qaAnswer.style.display = 'none';
+
+  try {
+    const result = await window.api.qaAsk(q);
+    // Render steps
+    elQa.qaStepsList.innerHTML = (result.steps || []).map(s =>
+      `<div class="qa-step-item"><span class="qa-step-round">第${s.round}轮</span> 搜索: <span class="qa-step-kw">${esc(s.keywords.join(', '))}</span> → 找到 ${s.found} 条 (共${s.total}条)</div>`
+    ).join('') || '<div style="color:var(--text-muted)">未找到相关记录</div>';
+
+    // Render answer
+    elQa.qaAnswer.style.display = '';
+    elQa.qaAnswerText.textContent = result.answer;
+    elQa.qaMeta.textContent = `共搜索 ${result.resultCount} 条相关记录`;
+  } catch (e) {
+    elQa.qaStepsList.innerHTML = '<div style="color:var(--red)">搜索失败: ' + esc(e.message) + '</div>';
+  }
+
+  elQa.qaAsk.disabled = false;
+  elQa.qaAsk.textContent = '提问';
+});
+
+// Also listen for step notifications during the search
+window.api.onQaStep((step) => {
+  elQa.qaStepsList.innerHTML += `<div class="qa-step-item"><span class="qa-step-round">第${step.round}轮</span> 搜索: <span class="qa-step-kw">${esc(step.keywords.join(', '))}</span> → 找到 ${step.found} 条</div>`;
+});
+
+elQa.qaInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') elQa.qaAsk.click();
+});
 
 async function initDiaryTab() {
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);

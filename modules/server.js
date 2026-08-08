@@ -80,7 +80,7 @@ function apiJSON(res, data) {
   res.end(JSON.stringify(data));
 }
 
-function handleAPI(req, res, url) {
+async function handleAPI(req, res, url) {
   if (url.pathname === '/api/state') {
     return apiJSON(res, currentState);
   }
@@ -115,17 +115,42 @@ function handleAPI(req, res, url) {
     } catch { return apiJSON(res, {}); }
   }
 
+  if (url.pathname === '/api/diary' || url.pathname === '/api/diary/') {
+    try {
+      const { loadDiary, generateDiary, loadSummariesForDate } = require('./diarist');
+      const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0];
+      let diary = loadDiary(date);
+      if (!diary || !diary.date) {
+        const s = loadSummariesForDate(date);
+        try { diary = await generateDiary(date, s); } catch(e) { return apiJSON(res, { error: e.message, date: date }); }
+      }
+      return apiJSON(res, diary || { date, summary: '暂无日记' });
+    } catch (e) { return apiJSON(res, { error: e.message }); }
+  }
+
+  if (url.pathname === '/api/qa' && req.method === 'POST') {
+    try {
+      const body = await new Promise(r => { let d='';req.on('data',c=>d+=c);req.on('end',()=>r(d)); });
+      const { question } = JSON.parse(body);
+      const { ask } = require('./qa');
+      const result = await ask(question);
+      return apiJSON(res, result);
+    } catch (e) { return apiJSON(res, { error: e.message }); }
+  }
+
   res.statusCode = 404;
   apiJSON(res, { error: 'Not found' });
 }
 
 // ─── Main handler ──────────────────────────────────────
-function requestHandler(req, res) {
+async function requestHandler(req, res) {
+  try {
   const url = new URL(req.url, 'http://localhost');
 
   // API
   if (url.pathname.startsWith('/api/')) {
-    return handleAPI(req, res, url);
+    await handleAPI(req, res, url);
+    return;
   }
 
   // Static files
@@ -146,6 +171,10 @@ function requestHandler(req, res) {
   }
 
   serveStatic(res, filePath);
+  } catch (e) {
+    if (!res.headersSent) { res.statusCode = 500; res.end('Server Error'); }
+    console.error('[Server]', e.message);
+  }
 }
 
 // ─── Watcher for toggle signal ─────────────────────────

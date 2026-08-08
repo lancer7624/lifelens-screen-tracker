@@ -1,62 +1,39 @@
 /**
  * screenshot.js — 截屏模块
- *
- * 使用 Electron desktopCapturer 捕获主屏幕，
- * 保存 PNG 到 screenshots/YYYY-MM/ 目录。
+ * 捕获主屏幕，缩小后存 PNG 以节省空间
  */
-
-const { desktopCapturer, screen } = require('electron');
+const { desktopCapturer, screen, nativeImage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { imagePathFor } = require('./storage');
 
-/**
- * 截取主屏幕，保存 PNG，返回图片信息
- * @returns {Promise<{absPath: string, relPath: string, timestamp: Date, size: number}>}
- */
+const MAX_WIDTH = 960; // scale down large screens, AI still readable
+
 async function capture() {
   const timestamp = new Date();
-
-  // 获取主屏幕实际分辨率
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.size;
+  let { width, height } = primaryDisplay.size;
 
-  // 获取屏幕源（使用实际分辨率）
+  // Scale down for storage efficiency
+  const scale = Math.min(1, MAX_WIDTH / width);
+  if (scale < 1) { width = Math.round(width * scale); height = Math.round(height * scale); }
+
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
     thumbnailSize: { width, height },
   });
 
-  if (sources.length === 0) {
-    throw new Error('未找到屏幕源 — 请确认桌面环境可用');
-  }
+  if (sources.length === 0) throw new Error('未找到屏幕源');
+  const img = sources[0].thumbnail;
+  const pngBuffer = img.toPNG();
+  if (!pngBuffer || pngBuffer.length === 0) throw new Error('截屏返回空数据');
 
-  // 取主屏幕（第一个）
-  const primarySource = sources[0];
-  const pngBuffer = primarySource.thumbnail.toPNG();
-
-  if (!pngBuffer || pngBuffer.length === 0) {
-    throw new Error('截屏返回空数据 — 重试中');
-  }
-
-  // 确定保存路径
   const { absPath, relPath } = imagePathFor(timestamp);
-
-  // 确保目录存在
   const dir = path.dirname(absPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  // 写入 PNG
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(absPath, pngBuffer);
 
-  return {
-    absPath,
-    relPath,
-    timestamp,
-    size: pngBuffer.length,
-  };
+  return { absPath, relPath, timestamp, size: pngBuffer.length };
 }
 
 module.exports = { capture };

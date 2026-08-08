@@ -58,10 +58,10 @@ body::after {
 
 /* ─── Tabs ─────────────────────────────────── */
 .tabs {
-  display: flex; gap: 4px; align-items: center;
+  display: flex; gap: 0; align-items: center;
 }
 .tab {
-  padding: 8px 22px; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: 8px 18px; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   border: 1px solid transparent; font-size: 14px; font-weight: 500;
   font-family: var(--font); cursor: pointer;
   background: transparent; color: var(--text-muted);
@@ -74,6 +74,9 @@ body::after {
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
 }
+.tab.gear {
+  margin-left: auto; padding: 8px 10px; font-size: 16px; border:none; background:transparent;
+}
 .tab-status {
   margin-left: auto; font-size: 12px; color: var(--accent);
   display: flex; align-items: center; gap: 6px;
@@ -83,6 +86,16 @@ body::after {
   background: var(--accent); animation: pulse 1.2s ease-in-out infinite;
 }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.sub-tabs { display: flex; gap: 2px; margin-left: 2px; }
+.sub-tab {
+  padding: 6px 14px; border-radius: 6px 6px 0 0; font-size: 12px; font-weight: 500;
+  font-family: var(--font); cursor: pointer; border: none;
+  background: transparent; color: var(--text-muted);
+  transition: background .2s, color .2s;
+}
+.sub-tab:hover { color: var(--text-secondary); }
+.sub-tab.active { background: var(--glass-raised); color: var(--accent); }
 
 .tab-content { display: none; flex-direction: column; gap: 18px; }
 .tab-content.active { display: flex; }
@@ -343,9 +356,18 @@ select.filter-input { cursor: pointer; }
 .db-stat-label{font-size:10px;color:var(--text-muted);margin-top:2px;text-transform:uppercase;letter-spacing:.04em}
 .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .chart-panel{overflow:hidden}
-.chart-wrap{display:flex;align-items:center;justify-content:center;min-height:220px;padding:8px 0}
+.chart-wrap{display:flex;align-items:center;justify-content:center;min-height:220px;padding:8px 0;overflow-x:auto}
 .chart-wrap canvas{max-width:100%;height:auto}
 @media(max-width:700px){.charts-grid{grid-template-columns:1fr}}
+
+/* QA */
+.qa-input-row{display:flex;gap:10px;align-items:center}
+.qa-input-row input{flex:1}
+.qa-step-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-secondary)}
+.qa-step-item:last-child{border-bottom:none}
+.qa-step-round{display:inline-block;padding:1px 8px;border-radius:8px;background:var(--accent-dim);color:var(--accent);font-size:10px;font-weight:600;margin-right:8px}
+.qa-step-kw{color:var(--accent);font-size:11px}
+.qa-answer-text{font-size:13.5px;line-height:1.8;color:var(--text-primary);white-space:pre-wrap}
 
 /* Settings */
 .settings-hint { font-size: 11px; color: var(--text-muted); margin-bottom: 14px; }
