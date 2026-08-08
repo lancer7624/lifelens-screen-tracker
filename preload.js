@@ -16,4 +16,6 @@ contextBridge.exposeInMainWorld('api', {
   getConfig: () => ipcRenderer.invoke('get-config'),
   saveConfig: (cfg) => ipcRenderer.invoke('save-config', cfg),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  getDiary: (date) => ipcRenderer.invoke('get-diary', date),
+  getAllDiaries: () => ipcRenderer.invoke('get-all-diaries'),
 });

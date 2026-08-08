@@ -354,6 +354,272 @@ function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').repl
 function escAttr(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtTime(iso) { return new Date(iso).toLocaleString('zh-CN', { hour12: false }); }
 
+// ═══ DIARY TAB ══════════════════════════════════════════
+const elDiary = {
+  dYear: $('#diaryYear'), dMonth: $('#diaryMonth'), dDay: $('#diaryDay'),
+  dPrev: $('#diaryPrev'), dNext: $('#diaryNext'), dStatus: $('#diaryStatus'),
+  dContent: $('#diaryContent'), dHighlights: $('#diaryHighlights'),
+  hlList: $('#hlList'), dTodos: $('#diaryTodos'), todoList: $('#todoList'),
+  dSuggestions: $('#diarySuggestions'), sugList: $('#sugList'),
+};
+
+function populateDiarySelects(date) {
+  const y = date.getFullYear(), m = date.getMonth() + 1, d = date.getDate();
+  populateYearSelect(elDiary.dYear, 2026, 2030, y);
+  populateMonthSelect(elDiary.dMonth, m);
+  populateDaySelect(elDiary.dDay, y, m, d);
+}
+elDiary.dYear.addEventListener('change', () => { syncDiaryDay(); loadDiaryForDate(); });
+elDiary.dMonth.addEventListener('change', () => { syncDiaryDay(); loadDiaryForDate(); });
+elDiary.dDay.addEventListener('change', loadDiaryForDate);
+elDiary.dPrev.addEventListener('click', () => shiftDiary(-1));
+elDiary.dNext.addEventListener('click', () => shiftDiary(1));
+
+function getDiaryDate() { return getDateFromSelects(elDiary.dYear, elDiary.dMonth, elDiary.dDay); }
+function syncDiaryDay() { const y = parseInt(elDiary.dYear.value), m = parseInt(elDiary.dMonth.value), cur = parseInt(elDiary.dDay.value), max = daysInMonth(y, m); populateDaySelect(elDiary.dDay, y, m, cur > max ? max : cur); }
+function shiftDiary(days) {
+  const d = getDiaryDate(); if (!d) return;
+  const dt = new Date(d + 'T12:00:00'); dt.setDate(dt.getDate() + days);
+  populateDiarySelects(dt); loadDiaryForDate();
+}
+
+async function loadDiaryForDate() {
+  const date = getDiaryDate(); if (!date) return;
+  elDiary.dStatus.textContent = '加载中…';
+  try {
+    const diary = await window.api.getDiary(date);
+    elDiary.dStatus.textContent = diary.entryCount ? `${diary.entryCount}个时段` : '';
+    renderDiary(diary);
+  } catch (e) {
+    elDiary.dStatus.textContent = '加载失败';
+    elDiary.dContent.innerHTML = '<div class="empty-hint">加载失败: ' + esc(e.message) + '</div>';
+  }
+}
+
+function renderDiary(diary) {
+  elDiary.dContent.innerHTML = `<div class="diary-card"><div class="diary-date">${esc(diary.date)}</div><div class="diary-body">${esc(diary.summary||'今天没有记录到任何活动。')}</div>${diary.tips ? `<div class="diary-tips">${esc(diary.tips)}</div>` : ''}</div>`;
+
+  if (diary.highlights && diary.highlights.length) {
+    elDiary.dHighlights.style.display = '';
+    elDiary.hlList.innerHTML = diary.highlights.map((h, i) => `<div class="hl-item"><span class="hl-num">${i+1}</span><span>${esc(h)}</span></div>`).join('');
+  } else { elDiary.dHighlights.style.display = 'none'; }
+
+  if (diary.todos && diary.todos.length) {
+    elDiary.dTodos.style.display = '';
+    elDiary.todoList.innerHTML = diary.todos.map(t => `<div class="todo-item">${esc(t)}</div>`).join('');
+  } else { elDiary.dTodos.style.display = 'none'; }
+
+  if (diary.suggestions && diary.suggestions.length) {
+    elDiary.dSuggestions.style.display = '';
+    elDiary.sugList.innerHTML = diary.suggestions.map(s => `<div class="sug-item">${esc(s)}</div>`).join('');
+  } else { elDiary.dSuggestions.style.display = 'none'; }
+}
+
+// ═══ DASHBOARD TAB ═════════════════════════════════════
+const elDb = {
+  periods: $$('.db-period'), dbYear: $('#dbYear'), dbMonth: $('#dbMonth'), dbDay: $('#dbDay'), dbLabel: $('#dbLabel'),
+};
+let dbPeriod = 'day';
+
+elDb.periods.forEach(b => b.addEventListener('click', function () {
+  elDb.periods.forEach(x => x.classList.remove('active'));
+  this.classList.add('active');
+  dbPeriod = this.dataset.period;
+  elDb.dbMonth.style.display = (dbPeriod === 'day' || dbPeriod === 'month') ? '' : 'none';
+  elDb.dbDay.style.display = dbPeriod === 'day' ? '' : 'none';
+  refreshDashboard();
+}));
+
+elDb.dbYear.addEventListener('change', refreshDashboard);
+elDb.dbMonth.addEventListener('change', refreshDashboard);
+elDb.dbDay.addEventListener('change', refreshDashboard);
+
+function initDashboardSelects() {
+  const now = new Date();
+  populateYearSelect(elDb.dbYear, 2026, 2030, now.getFullYear());
+  populateMonthSelect(elDb.dbMonth, now.getMonth() + 1);
+  populateDaySelect(elDb.dbDay, now.getFullYear(), now.getMonth() + 1, now.getDate());
+  elDb.dbMonth.style.display = '';
+  elDb.dbDay.style.display = '';
+}
+
+function getDashboardRange() {
+  const y = parseInt(elDb.dbYear.value) || new Date().getFullYear();
+  const m = parseInt(elDb.dbMonth.value) || 1;
+  const d = parseInt(elDb.dbDay.value) || 1;
+  const start = new Date(y, m - 1, d);
+  let end;
+  switch (dbPeriod) {
+    case 'day': end = new Date(start); end.setDate(end.getDate() + 1); break;
+    case 'week': end = new Date(start); end.setDate(end.getDate() + 7); break;
+    case 'month': end = new Date(start); end.setMonth(end.getMonth() + 1); break;
+    case 'year': end = new Date(start); end.setFullYear(end.getFullYear() + 1); break;
+    default: end = new Date(start); end.setDate(end.getDate() + 1);
+  }
+  elDb.dbLabel.textContent = `${start.toLocaleDateString('zh-CN')} — ${new Date(end.getTime()-86400000).toLocaleDateString('zh-CN')}`;
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+async function refreshDashboard() {
+  const range = getDashboardRange();
+  try {
+    const allS = await window.api.getSummaries();
+    const filtered = allS.filter(s => {
+      const t = new Date(s.blockStart);
+      return t >= new Date(range.start) && t < new Date(range.end);
+    });
+
+    if (!filtered.length) {
+      $('#dbStats').innerHTML = '<div class="empty-hint">暂无数据</div>';
+      ['chartPie', 'chartSoftware', 'chartProjects', 'chartTimeline'].forEach(id => {
+        const c = document.getElementById(id); if (c) { const cx = c.getContext('2d'); cx.clearRect(0, 0, c.width, c.height); cx.fillStyle = '#6e707d'; cx.font = '13px sans-serif'; cx.textAlign = 'center'; cx.fillText('暂无数据', c.width/2, c.height/2); }
+      });
+      return;
+    }
+
+    // Stat cards
+    const cats = {}; const sw = new Set();
+    for (const s of filtered) { cats[s.category] = (cats[s.category] || 0) + 1; (s.software || []).forEach(a => sw.add(a)); }
+    const topCat = Object.entries(cats).sort((a, b) => b[1] - a[1])[0];
+    const hours = new Set(); for (const s of filtered) hours.add(new Date(s.blockStart).getHours());
+    $('#dbStats').innerHTML = `
+      <div class="db-stat"><div class="db-stat-num">${filtered.length}</div><div class="db-stat-label">总时段</div></div>
+      <div class="db-stat"><div class="db-stat-num">${hours.size}h</div><div class="db-stat-label">活跃小时</div></div>
+      <div class="db-stat"><div class="db-stat-num">${topCat?.[0]||'—'}</div><div class="db-stat-label">主要活动</div></div>
+      <div class="db-stat"><div class="db-stat-num">${sw.size}</div><div class="db-stat-label">软件数</div></div>`;
+
+    drawCatPie(filtered);
+    drawSoftwareBar(filtered);
+    drawProjectBar(filtered);
+    drawTimeline(filtered, range);
+  } catch (e) { console.error('Dashboard:', e); }
+}
+
+// ─── Pie Chart: Category ────────────────────────────────
+// ═══ CHART ENGINE (finesse) ═══════════════════════════
+const CHART_COLORS={'工作':'#7db87d','学习':'#7daed8','娱乐':'#d4a87d','社交':'#c894c8'};
+const CHART_FB=['#7db87d','#7daed8','#d4a87d','#c894c8','#c8946c','#8a9a90'];
+
+function rrect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath()}
+
+// Chart tooltip system
+let _ctCanvas=null,_ctData=[],_ctTT=null;
+function initChartTT(canvas,data){_ctCanvas=canvas;_ctData=data;_ctTT=_ctTT||(()=>{const d=document.createElement('div');d.className='hm-tt';d.id='chartTT';document.body.appendChild(d);return d})();canvas.onmousemove=e=>{const r=canvas.getBoundingClientRect();const items=_ctData.filter(d=>d.test(e.clientX-r.left,e.clientY-r.top));if(items.length){const t=_ctTT();t.innerHTML=items[0].html;t.style.display='block';t.style.left=(e.clientX+14)+'px';t.style.top=(e.clientY-8)+'px'}else{_ctTT().style.display='none'}};canvas.onmouseleave=()=>{_ctTT().style.display='none'}}
+
+function drawCatPie(summaries){
+  const cats={};for(const s of summaries){const c=s.category||'未知';cats[c]=(cats[c]||0)+1}
+  const canvas=document.getElementById('chartPie');const ctx=canvas.getContext('2d');
+  const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2,R=Math.min(cx,cy)-28;ctx.clearRect(0,0,w,h);
+  const items=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  const total=items.reduce((s,[,v])=>s+v,0);if(!total)return;
+
+  ctx.shadowColor='rgba(0,0,0,.25)';ctx.shadowBlur=10;ctx.shadowOffsetY=2;
+  let angle=-Math.PI/2;
+  items.forEach(([name,val],i)=>{
+    const slice=(val/total)*Math.PI*2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R,angle,angle+slice);
+    ctx.fillStyle=CHART_COLORS[name]||CHART_FB[i%CHART_FB.length];ctx.fill();
+    if(val/total>.06){
+      const mid=angle+slice/2;
+      ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+      ctx.fillStyle='#0d0b0a';ctx.font='bold 11px "PingFang SC","Microsoft YaHei",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(Math.round(val/total*100)+'%',cx+Math.cos(mid)*R*.6,cy+Math.sin(mid)*R*.6);
+      ctx.shadowColor='rgba(0,0,0,.25)';ctx.shadowBlur=10;ctx.shadowOffsetY=2;
+    }
+    angle+=slice;
+  });
+  ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+
+  ctx.textBaseline='middle';let ly=18;
+  items.forEach(([name,val],i)=>{
+    const col=CHART_COLORS[name]||CHART_FB[i%CHART_FB.length];
+    ctx.fillStyle=col;rrect(ctx,10,ly-6,12,12,3);ctx.fill();
+    ctx.fillStyle='#b0aab8';ctx.font='11px "PingFang SC","Microsoft YaHei",sans-serif';ctx.textAlign='left';
+    ctx.fillText(name+'  '+val+'时段',28,ly);ly+=22;
+  });
+}
+
+function drawSoftwareBar(summaries){
+  const sw={};for(const s of summaries)for(const a of(s.software||[])){sw[a]=(sw[a]||0)+1}
+  const items=Object.entries(sw).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const canvas=document.getElementById('chartSoftware');const ctx=canvas.getContext('2d');
+  const w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);
+  if(!items.length)return;
+  const max=items[0][1],barH=Math.min(24,(h-40)/items.length);
+  const ttData=[];
+  items.forEach(([name,val],i)=>{
+    const bw=Math.max(4,(val/max)*(w-130)),y=16+i*(barH+8);
+    ttData.push({test:(mx,my)=>mx>=108&&mx<=108+bw&&my>=y&&my<=y+barH,html:`<b>${esc(name)}</b><br>${val} 次`});
+    ctx.fillStyle='rgba(255,255,255,.025)';rrect(ctx,108,y,w-125,barH,4);ctx.fill();
+    const g=ctx.createLinearGradient(108,0,300,0);g.addColorStop(0,'#c8946c');g.addColorStop(1,'rgba(200,148,108,.35)');
+    ctx.fillStyle=g;rrect(ctx,108,y,bw,barH,4);ctx.fill();
+    ctx.fillStyle='#b0aab8';ctx.font='11px "PingFang SC","Microsoft YaHei",sans-serif';ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(name.length>11?name.slice(0,10)+'…':name,104,y+barH/2);
+    ctx.fillStyle='#e4e5ea';ctx.textAlign='left';ctx.font='bold 11px "SF Mono","Cascadia Code",monospace';
+    ctx.fillText(val,112+bw,y+barH/2);
+  });
+  initChartTT(canvas,ttData);
+}
+
+function drawProjectBar(summaries){
+  const proj={};for(const s of summaries){const p=s.project||'未知';proj[p]=(proj[p]||0)+1}
+  const items=Object.entries(proj).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const canvas=document.getElementById('chartProjects');const ctx=canvas.getContext('2d');
+  const w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);
+  if(!items.length)return;
+  const max=items[0][1],barH=Math.min(30,(h-40)/items.length);
+  items.forEach(([name,val],i)=>{
+    const bw=Math.max(4,(val/max)*(w-170)),y=16+i*(barH+10);
+    ctx.fillStyle='rgba(255,255,255,.025)';rrect(ctx,138,y,w-165,barH,4);ctx.fill();
+    const g=ctx.createLinearGradient(138,0,380,0);g.addColorStop(0,'#7daed8');g.addColorStop(1,'rgba(125,174,216,.35)');
+    ctx.fillStyle=g;rrect(ctx,138,y,bw,barH,4);ctx.fill();
+    ctx.fillStyle='#b0aab8';ctx.font='11px "PingFang SC","Microsoft YaHei",sans-serif';ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(name.length>14?name.slice(0,13)+'…':name,134,y+barH/2);
+    ctx.fillStyle='#e4e5ea';ctx.textAlign='left';ctx.font='bold 11px "SF Mono","Cascadia Code",monospace';
+    ctx.fillText(val+'时段',142+bw,y+barH/2);
+  });
+}
+
+function drawTimeline(summaries,range){
+  const canvas=document.getElementById('chartTimeline');const ctx=canvas.getContext('2d');
+  const w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);
+  const hourCats={};
+  for(const s of summaries){const hr=new Date(s.blockStart).getHours();if(!hourCats[hr])hourCats[hr]={};const c=s.category||'未知';hourCats[hr][c]=(hourCats[hr][c]||0)+1}
+  let max=1;for(const h of Object.values(hourCats)){const t=Object.values(h).reduce((a,b)=>a+b,0);if(t>max)max=t}
+  const colW=(w-45)/24,chartH=h-30;
+  ctx.strokeStyle='rgba(255,255,255,.025)';ctx.lineWidth=1;
+  for(let i=2;i<5;i++){const gy=8+(chartH/5)*i;ctx.beginPath();ctx.moveTo(30,gy);ctx.lineTo(w-12,gy);ctx.stroke()}
+  for(let hr=0;hr<24;hr++){
+    const x=30+hr*colW,entries=Object.entries(hourCats[hr]||{}).sort((a,b)=>b[1]-a[1]);
+    const total=entries.reduce((s,[,v])=>s+v,0);if(!total)continue;
+    let sy=8+chartH;
+    entries.forEach(([cat,val])=>{const segH=(val/max)*chartH;sy-=segH;ctx.fillStyle=CHART_COLORS[cat]||CHART_FB[0];ctx.fillRect(x+1.5,sy,colW-3,Math.max(3,segH))});
+  }
+  ctx.fillStyle='#6e707d';ctx.font='9px "PingFang SC","Microsoft YaHei",sans-serif';ctx.textAlign='center';
+  for(let h=0;h<24;h+=3)ctx.fillText(h+'时',30+h*colW+colW/2,h-2);
+  ctx.textAlign='right';ctx.fillText(max,24,14);
+}
+
+// Extend tab switching for diary + dashboard
+const origSwitchTab2 = switchTab;
+switchTab = function (name) {
+  origSwitchTab2(name);
+  if (name === 'diary') initDiaryTab();
+  if (name === 'dashboard') initDashboardTab();
+  if (name === 'settings') loadSettingsTab();
+};
+
+async function initDiaryTab() {
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  populateDiarySelects(yesterday);
+  loadDiaryForDate();
+}
+
+function initDashboardTab() {
+  initDashboardSelects();
+  refreshDashboard();
+}
+
 // ═══ SETTINGS TAB ═══════════════════════════════════════
 async function loadSettingsTab() {
   try {

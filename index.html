@@ -14,9 +14,11 @@
 
   <!-- ═══ Tabs ═══ -->
   <nav class="tabs">
-    <button class="tab active" data-tab="monitor">监控</button>
-    <button class="tab" data-tab="dynamic">动态</button>
-    <button class="tab" data-tab="settings">设置</button>
+    <button class="tab active" data-tab="monitor">📡 监控</button>
+    <button class="tab" data-tab="dynamic">📈 动态</button>
+    <button class="tab" data-tab="diary">📔 日记</button>
+    <button class="tab" data-tab="dashboard">📊 看板</button>
+    <button class="tab" data-tab="settings">⚙️ 设置</button>
     <span class="tab-status" id="tabStatus"></span>
   </nav>
 
@@ -143,6 +145,78 @@
       </div>
     </section>
 
+  </div>
+
+  <!-- ═══ TAB: 日记 ═══ -->
+  <div class="tab-content" id="tab-diary">
+    <section class="panel">
+      <div class="diary-controls">
+        <button class="btn btn-sm" id="diaryPrev">◀</button>
+        <select id="diaryYear" class="filter-input" style="width:80px"></select>
+        <select id="diaryMonth" class="filter-input" style="width:65px"></select>
+        <select id="diaryDay" class="filter-input" style="width:65px"></select>
+        <button class="btn btn-sm" id="diaryNext">▶</button>
+        <span id="diaryStatus" style="font-size:11px;color:var(--text-muted);margin-left:8px"></span>
+      </div>
+    </section>
+
+    <section class="panel" id="diaryContent">
+      <div class="empty-hint">选择日期查看日记</div>
+    </section>
+
+    <section class="panel" id="diaryHighlights" style="display:none">
+      <div class="panel-title">🌟 今日高光</div>
+      <div class="diary-highlights" id="hlList"></div>
+    </section>
+
+    <section class="panel" id="diaryTodos" style="display:none">
+      <div class="panel-title">📋 待办提醒</div>
+      <div class="diary-todos" id="todoList"></div>
+    </section>
+
+    <section class="panel" id="diarySuggestions" style="display:none">
+      <div class="panel-title">💡 优化建议</div>
+      <div id="sugList"></div>
+    </section>
+  </div>
+
+  <!-- ═══ TAB: 看板 ═══ -->
+  <div class="tab-content" id="tab-dashboard">
+    <section class="panel">
+      <div class="db-controls">
+        <button class="btn btn-sm db-period active" data-period="day">日</button>
+        <button class="btn btn-sm db-period" data-period="week">周</button>
+        <button class="btn btn-sm db-period" data-period="month">月</button>
+        <button class="btn btn-sm db-period" data-period="year">年</button>
+        <select id="dbYear" class="filter-input" style="width:80px"></select>
+        <select id="dbMonth" class="filter-input" style="width:65px" id="dbMonth"></select>
+        <select id="dbDay" class="filter-input" style="width:65px" id="dbDay"></select>
+        <span id="dbLabel" style="font-size:11px;color:var(--text-muted);margin-left:8px"></span>
+      </div>
+    </section>
+
+    <div class="db-stats" id="dbStats"></div>
+
+    <div class="charts-grid">
+      <section class="panel chart-panel">
+        <div class="panel-title">活动类型占比</div>
+        <div class="chart-wrap"><canvas id="chartPie" width="300" height="300"></canvas></div>
+      </section>
+      <section class="panel chart-panel">
+        <div class="panel-title">软件使用排名</div>
+        <div class="chart-wrap"><canvas id="chartSoftware" width="400" height="300"></canvas></div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="panel-title">项目专注时间</div>
+      <div class="chart-wrap"><canvas id="chartProjects" width="760" height="300"></canvas></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">活动时间分布</div>
+      <div class="chart-wrap"><canvas id="chartTimeline" width="760" height="200"></canvas></div>
+    </section>
   </div>
 
   <!-- ═══ TAB: 设置 ═══ -->

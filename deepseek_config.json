@@ -1,6 +1,6 @@
 {
   "vision_provider": "ollama",
-  "api_key": "",
+  "api_key": "sk-052c1289f5f04e978488a6b35b5158d0",
   "model": "deepseek-v4-flash",
   "base_url": "https://api.deepseek.com/v1/chat/completions",
   "ollama_host": "127.0.0.1",

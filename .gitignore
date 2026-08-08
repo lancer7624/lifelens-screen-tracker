@@ -1,6 +1,7 @@
 node_modules/
 screenshots/
 summaries/
+diaries/
 bg.jpg
 *.log
 dist/

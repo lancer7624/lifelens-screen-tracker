@@ -8,6 +8,7 @@ const { analyze, USE_PIPELINE, getModel: getAnalysisModel, setModel: setAnalysis
 const { saveRecord, todayCount } = require('./modules/storage');
 const { summarizeBlock, findUnprocessedBlocks, loadAllSummaries, getModel: getSummaryModel, setModel: setSummaryModel } = require('./modules/summarizer');
 const { start: startServer, updateState: updateServerState } = require('./modules/server');
+const { generateDiary, loadDiary, findUnprocessedDates, loadSummariesForDate, loadAllDiaries } = require('./modules/diarist');
 
 // ─── 配置 ───────────────────────────────────────────
 const INTERVAL_MS = 20_000;
@@ -93,6 +94,24 @@ function setupIPC() {
   ipcMain.handle('open-data-folder', async () => shell.openPath(path.join(__dirname, 'screenshots')));
   ipcMain.handle('quit-app', async () => { stopLoop(); app.quit(); return { ok: true }; });
   ipcMain.handle('open-external', async (_e, url) => { return shell.openExternal(url); });
+
+  // Diary IPC
+  ipcMain.handle('get-diary', async (_e, dateStr) => {
+    let diary = loadDiary(dateStr);
+    if (!diary) {
+      const summaries = loadSummariesForDate(dateStr);
+      try {
+        diary = await generateDiary(dateStr, summaries);
+      } catch (e) {
+        diary = { date: dateStr, summary: '生成失败: ' + e.message, highlights: [], todos: [], suggestions: [], tips: '', entryCount: summaries.length };
+      }
+    }
+    return diary;
+  });
+
+  ipcMain.handle('get-all-diaries', async () => loadAllDiaries());
+
+  ipcMain.handle('get-unprocessed-diaries', async () => findUnprocessedDates());
 
   ipcMain.handle('set-model', async (_e, model) => {
     setAnalysisModel(model);
@@ -330,8 +349,22 @@ app.whenReady().then(async () => {
   addLog(`局域网访问: ${state.mobileURL}`);
   pushState();
 
-  // 启动后排隊处理遗漏汇总
+  // 启动后排隊处理遗漏汇总 + 日记
   setTimeout(() => processQueue(), 3000);
+  setTimeout(async () => {
+    const dates = findUnprocessedDates();
+    if (dates.length > 0) {
+      addLog(`发现 ${dates.length} 天未生成日记，开始处理...`);
+      for (const d of dates) {
+        try {
+          const s = loadSummariesForDate(d);
+          await generateDiary(d, s);
+          addLog(`日记: ${d}`);
+        } catch (e) { addLog(`日记失败 ${d}: ${e.message}`); }
+      }
+      addLog('日记补处理完成');
+    }
+  }, 5000);
 });
 
 app.on('window-all-closed', () => { stopLoop(); app.quit(); });
