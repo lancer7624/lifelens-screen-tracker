@@ -358,6 +358,8 @@ select.filter-input { cursor: pointer; }
 .chart-panel{overflow:hidden}
 .chart-wrap{display:flex;align-items:center;justify-content:center;min-height:220px;padding:8px 0;overflow-x:auto}
 .chart-wrap canvas{max-width:100%;height:auto}
+#chartPie{cursor:pointer}
+#chartPie:hover{opacity:.95}
 @media(max-width:700px){.charts-grid{grid-template-columns:1fr}}
 
 /* QA */

@@ -179,8 +179,8 @@ function shiftWebDiary(days){const dt=getWebDiaryDate();if(!dt)return;const d=ne
 async function loadWebDiary(){
   const date=getWebDiaryDate();if(!date)return;
   try{
-    const diary=await api('/api/diary?date='+date);
-    if(!diary||diary.error){$('#diaryContent').innerHTML='<div class="diary-card"><div class="diary-date">'+date+'</div><div class="diary-body">暂无日记</div></div>';return}
+    const [y,m,d]=date.split('-');const diary=await fetch(`/diaries/${y}-${m}/${date}.json`).then(r=>r.ok?r.json():null);
+    if(!diary||!diary.date){$('#diaryContent').innerHTML='<div class="diary-card"><div class="diary-date">'+date+'</div><div class="diary-body">暂无日记</div></div>';return}
     $('#diaryContent').innerHTML='<div class="diary-card"><div class="diary-date">'+esc(diary.date)+'</div><div class="diary-body">'+esc(diary.summary||'')+'</div>'+(diary.tips?'<div class="diary-tips">'+esc(diary.tips)+'</div>':'')+'</div>';
     const hls=document.getElementById('hlList'),tds=document.getElementById('todoList'),sgs=document.getElementById('sugList');
     if(hls)hls.innerHTML=(diary.highlights||[]).map((h,i)=>'<div class="hl-item"><span class="hl-num">'+(i+1)+'</span><span>'+esc(h)+'</span></div>').join('');

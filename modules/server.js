@@ -115,19 +115,6 @@ async function handleAPI(req, res, url) {
     } catch { return apiJSON(res, {}); }
   }
 
-  if (url.pathname === '/api/diary' || url.pathname === '/api/diary/') {
-    try {
-      const { loadDiary, generateDiary, loadSummariesForDate } = require('./diarist');
-      const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0];
-      let diary = loadDiary(date);
-      if (!diary || !diary.date) {
-        const s = loadSummariesForDate(date);
-        try { diary = await generateDiary(date, s); } catch(e) { return apiJSON(res, { error: e.message, date: date }); }
-      }
-      return apiJSON(res, diary || { date, summary: '暂无日记' });
-    } catch (e) { return apiJSON(res, { error: e.message }); }
-  }
-
   if (url.pathname === '/api/qa' && req.method === 'POST') {
     try {
       const body = await new Promise(r => { let d='';req.on('data',c=>d+=c);req.on('end',()=>r(d)); });
@@ -197,6 +184,10 @@ function start(stateObj, onToggle) {
   const ip = getLanIP();
 
   server = http.createServer(requestHandler);
+  server.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') console.error('[Server] Port '+PORT+' in use — old instance still running?');
+    else console.error('[Server]', e.message);
+  });
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`[Server] Web dashboard: http://${ip}:${PORT}`);
   });
